@@ -43,7 +43,7 @@ test('plugin exposes name, inject list and an apply function', () => {
   assert.equal(typeof apply, 'function')
 })
 
-test('registering six tools through a mock registry', () => {
+test('registering seven tools through a mock registry', () => {
   const { ctx, disposers } = makeCtx()
   const seen = []
   ctx.get = (service) => {
@@ -88,4 +88,5 @@ test('findApps locates Vizro entry files', () => {
   const apps = findApps(ROOT, 2, 10)
   assert.ok(apps.some((app) => app.name.endsWith('.py')))
 })
+
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-vizro",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Build, validate and preview Vizro dashboards inside DeepSeek Harness: six native tools over a Python sidecar, six skills, and a workbench panel. No MCP server.",
   "type": "module",
   "main": "lib/host/index.js",
@@ -66,4 +66,5 @@
   "author": "lion231226",
   "license": "MIT"
 }
+
 
