@@ -155,7 +155,7 @@ async function main() {
   try {
     const started = await call('vizro_run', { action: 'start', entry: path.join(demo, 'app.py') })
     const up = started.state === 'running' && /^http:\/\/127\.0\.0\.1:\d+\/$/.test(started.url ?? '')
-    const probed = up ? await call('vizro_probe', { entry: path.join(demo, 'app.py') }) : { ok: false, checks: [] }
+    const probed = up ? await call('vizro_probe', { entry: path.join(demo, 'app.py'), render: 'off' }) : { ok: false, checks: [] }
     const checks = Object.fromEntries((probed.checks ?? []).map((check) => [check.name, check.ok]))
     record(
       'run starts a server and probe verifies it',
@@ -177,7 +177,7 @@ async function main() {
     const broken = path.join(WORK, 'broken.py')
     await writeFile(broken, 'import vizro.models as vm\ndashboard = vm.Dashboard(pages=[vm.Page(title="b", components=[{"type": "nope"}])])\napp = None\n')
     const started = await call('vizro_run', { action: 'start', entry: broken })
-    const probed = await call('vizro_probe', { entry: broken })
+    const probed = await call('vizro_probe', { entry: broken, render: 'off' })
     record('broken app reports failed state and probe refuses it', started.state === 'failed' && probed.ok === false, `state=${started.state}`)
   } catch (error) {
     record('broken app reports failed state and probe refuses it', false, String(error?.message ?? error))
@@ -194,6 +194,134 @@ async function main() {
     )
   } catch (error) {
     record('seven tools with descriptions and output renderers', false, String(error?.message ?? error))
+  }
+
+  console.log('> case 10 render check')
+  let browserAvailable = false
+  try {
+    const { findBrowser } = await import('../lib/host/render.js')
+    browserAvailable = Boolean(findBrowser())
+    const started = await call('vizro_run', { action: 'start', entry: path.join(demo, 'app.py') })
+    const out = started.state === 'running' ? await call('vizro_probe', { entry: path.join(demo, 'app.py'), render: 'auto' }) : { checks: [], verdict: started.state }
+    const render = (out.checks ?? []).find((check) => check.name === 'render')
+    const ok = browserAvailable
+      ? render?.ok === true && out.verdict === 'pass'
+      : render?.ok === null && out.verdict === 'unknown'
+    record(
+      browserAvailable ? 'probe renders the dashboard in a headless browser' : 'probe reports render as unknown without a browser',
+      ok,
+      `browser=${browserAvailable} started=${started.state} render_ok=${render?.ok} verdict=${out.verdict} detail=${(render?.detail ?? '').slice(0, 80)}`,
+    )
+  } catch (error) {
+    record('probe renders the dashboard in a headless browser', false, String(error?.message ?? error))
+  } finally {
+    try {
+      await call('vizro_run', { action: 'stop', entry: path.join(demo, 'app.py') })
+    } catch {
+      // ignore
+    }
+  }
+
+  console.log('> case 11 blank page must go red')
+  let blankServer = null
+  try {
+    const http = await import('node:http')
+    blankServer = http.createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html' })
+      res.end('<!doctype html><html><head><title>Blank</title></head><body><div id="react-entry-point"></div></body></html>')
+    })
+    await new Promise((resolve) => blankServer.listen(0, '127.0.0.1', resolve))
+    const url = `http://127.0.0.1:${blankServer.address().port}/`
+    const out = await call('vizro_probe', { url, render: 'require' })
+    const render = (out.checks ?? []).find((check) => check.name === 'render')
+    record(
+      'a blank page fails the render check',
+      out.verdict === 'fail' && render?.ok === false,
+      `verdict=${out.verdict} detail=${(render?.detail ?? '').slice(0, 100)}`,
+    )
+  } catch (error) {
+    record('a blank page fails the render check', false, String(error?.message ?? error))
+  } finally {
+    if (blankServer) {
+      blankServer.closeAllConnections?.()
+      await new Promise((resolve) => blankServer.close(resolve)).catch(() => {})
+    }
+  }
+
+  console.log('> case 12 no browser means unknown, not pass')
+  try {
+    const previous = process.env.DSH_VIZRO_BROWSER
+    process.env.DSH_VIZRO_BROWSER = 'none'
+    const started = await call('vizro_run', { action: 'start', entry: path.join(demo, 'app.py') })
+    const live = started.state === 'running' ? await call('vizro_probe', { entry: path.join(demo, 'app.py'), render: 'auto' }) : { checks: [], verdict: started.state }
+    if (previous === undefined) delete process.env.DSH_VIZRO_BROWSER
+    else process.env.DSH_VIZRO_BROWSER = previous
+    const render = (live.checks ?? []).find((check) => check.name === 'render')
+    record(
+      'without a browser the verdict is unknown, not pass',
+      live.ok === null && live.verdict === 'unknown' && render?.ok === null,
+      `ok=${live.ok} verdict=${live.verdict} render=${render?.ok} started=${started.state}`,
+    )
+  } catch (error) {
+    record('without a browser the verdict is unknown, not pass', false, String(error?.message ?? error))
+  } finally {
+    if (process.env.DSH_VIZRO_BROWSER === 'none') delete process.env.DSH_VIZRO_BROWSER
+    try {
+      await call('vizro_run', { action: 'stop', entry: path.join(demo, 'app.py') })
+    } catch {
+      // ignore
+    }
+  }
+
+  console.log('> case 13 aggregate row is flagged by the profiler')
+  try {
+    const csv = path.join(WORK, 'totals.csv')
+    await writeFile(csv, 'item,value\nA,3\nB,7\nTOTAL,10\n')
+    const out = await call('vizro_data', { path: csv, name: 'totals' })
+    const warning = (out.warnings ?? [])[0]
+    record('profile flags a total row', out.warnings?.length === 1 && warning.code === 'aggregate_row_suspected', warning?.evidence?.reason ?? 'no warning')
+  } catch (error) {
+    record('profile flags a total row', false, String(error?.message ?? error))
+  }
+
+  console.log('> case 14 kpi_card on a total row warns at validation')
+  try {
+    const csv = path.join(WORK, 'totals.csv')
+    const out = await call('vizro_validate', {
+      config: {
+        pages: [
+          {
+            title: 'KPI',
+            components: [
+              { type: 'figure', figure: { _target_: 'kpi_card', data_frame: 'totals', value_column: 'value', agg_func: 'sum' } },
+            ],
+          },
+        ],
+      },
+      data: { totals: { path: csv } },
+    })
+    const warning = (out.warnings ?? [])[0]
+    record(
+      'validation warns that the KPI double-counts the total row',
+      out.valid === true && warning?.code === 'kpi_card_double_counts_total',
+      warning?.message?.slice(0, 90) ?? 'no warning',
+    )
+  } catch (error) {
+    record('validation warns that the KPI double-counts the total row', false, String(error?.message ?? error))
+  }
+
+  console.log('> case 15 pinned front-end stack')
+  try {
+    const out = await call('vizro_doctor', { deep: true })
+    const frontend = out.frontend ?? {}
+    const dmcMajor = Number(String(frontend.dash_mantine_components ?? '0').split('.')[0])
+    record(
+      'dash-mantine-components stays below 3 and React is compatible',
+      frontend.react_compatible === true && dmcMajor > 0 && dmcMajor < 3,
+      `dash=${frontend.dash} dmc=${frontend.dash_mantine_components} react=${frontend.react} (${frontend.react_source})`,
+    )
+  } catch (error) {
+    record('dash-mantine-components stays below 3 and React is compatible', false, String(error?.message ?? error))
   }
 
   sidecar.dispose('eval finished')

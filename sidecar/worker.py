@@ -3,6 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #   "vizro==1.0.0",
+#   "dash-mantine-components<3",
 #   "pyyaml>=6",
 #   "openpyxl>=3.1",
 #   "pyarrow>=14",
@@ -18,6 +19,7 @@ Protocol: one JSON object per line.
 
 Methods
   ping      -> runtime identity (versions)
+  env       -> dash / dash-mantine-components / React compatibility, without serving
   models    -> public Vizro model index
   schema    -> JSON Schema for one model (top-level $ref inlined, $defs dropped)
   validate  -> validate a dashboard config through the production Pydantic path,
@@ -31,9 +33,11 @@ redirected to stderr so a stray print can never corrupt the stream.
 
 from __future__ import annotations
 
+import copy
 import io
 import json
 import os
+import re
 import sys
 import traceback
 from typing import Any
@@ -101,6 +105,8 @@ class Worker:
         self._vm = None
         self._Vizro = None
         self._pandas = None
+        # name -> aggregate-row note for the data registered in the current call
+        self._data_notes: dict[str, dict] = {}
 
     # -- lazy imports --------------------------------------------------------
     def _load(self):
@@ -130,6 +136,38 @@ class Worker:
             "platform": sys.platform,
             "cwd": os.getcwd(),
         }
+
+    def env(self, _params: dict) -> dict:
+        """Static front-end compatibility facts, without starting a server.
+
+        A blank dashboard is the usual failure of a React-version mismatch; the
+        only cheap way to catch it is to compare what is installed with what
+        dash will actually serve.
+        """
+        out: dict[str, Any] = {
+            "dash": None,
+            "dash_mantine_components": None,
+            "react": None,
+            "react_source": "unknown",
+        }
+        try:
+            import dash
+
+            out["dash"] = getattr(dash, "__version__", None)
+        except Exception as exc:  # noqa: BLE001
+            out["dash_error"] = f"{type(exc).__name__}: {exc}"
+        try:
+            import dash_mantine_components as dmc
+
+            out["dash_mantine_components"] = getattr(dmc, "__version__", None)
+        except Exception:  # noqa: BLE001
+            pass
+        react, source = _effective_react_version()
+        out["react"], out["react_source"] = react, source
+        compatible, detail = _react_compat(out["dash"], out["dash_mantine_components"], react)
+        out["react_compatible"] = compatible
+        out["detail"] = detail
+        return out
 
     def models(self, _params: dict) -> dict:
         vizro, vm, _V = self._load()
@@ -237,6 +275,9 @@ class Worker:
         data_error = self._register_data(params.get("data") or {})
         allow = params.get("allow_undefined") or []
         context = {"allow_undefined_captured_callable": list(allow)}
+        # Vizro's before-validator rewrites `figure` dicts in place, so the
+        # KPI warning has to read a snapshot taken before validation.
+        config_snapshot = copy.deepcopy(config)
 
         Vizro._reset()
         try:
@@ -257,13 +298,21 @@ class Worker:
                 "python_code": None,
                 "render_error": f"{type(exc).__name__}: {exc}",
                 "stats": _dashboard_stats(dashboard),
+                "warnings": _kpi_warnings(config_snapshot, self._data_notes),
             }
         stats = _dashboard_stats(dashboard)
         Vizro._reset()
-        return {"valid": True, "vizro": vizro.__version__, "python_code": python_code, "stats": stats}
+        return {
+            "valid": True,
+            "vizro": vizro.__version__,
+            "python_code": python_code,
+            "stats": stats,
+            "warnings": _kpi_warnings(config_snapshot, self._data_notes),
+        }
 
     def _register_data(self, entries: dict) -> str | None:
         """Make named data sources resolvable before validation, as YAML/JSON needs."""
+        self._data_notes = {}
         if not entries:
             return None
         try:
@@ -295,6 +344,9 @@ class Worker:
                 else:
                     raise SidecarError("invalid_data", f"data[{name}] needs builtin, path or records")
                 data_manager[name] = frame
+                note = _aggregate_row_note(pd, frame)
+                if note:
+                    self._data_notes[str(name)] = note
             except SidecarError:
                 raise
             except Exception as exc:  # noqa: BLE001
@@ -371,6 +423,20 @@ class Worker:
             columns.append(entry)
 
         sample = _records(frame.head(sample_rows))
+        warnings = []
+        note = _aggregate_row_note(pd, frame)
+        if note:
+            warnings.append(
+                {
+                    "code": "aggregate_row_suspected",
+                    "message": (
+                        f"`{os.path.basename(path)}` looks like it contains a total row "
+                        f"({note['reason']} at row {note['row']}). A kpi_card with agg_func='sum' "
+                        "will count that row again; register a detail-only frame for KPI components."
+                    ),
+                    "evidence": note,
+                }
+            )
         return {
             "path": os.path.abspath(path),
             "rows": int(len(frame)),
@@ -378,12 +444,14 @@ class Worker:
             "columns": columns,
             "sample": sample,
             "sample_rows": min(sample_rows, len(frame)),
+            "warnings": warnings,
         }
 
     # -- dispatch ------------------------------------------------------------
     def dispatch(self, method: str, params: dict) -> Any:
         handlers = {
             "ping": self.ping,
+            "env": self.env,
             "models": self.models,
             "schema": self.schema,
             "validate": self.validate,
@@ -393,6 +461,162 @@ class Worker:
         if handler is None:
             raise SidecarError("unknown_method", f"Unknown method {method!r}", {"available": sorted(handlers)})
         return handler(params or {})
+
+
+_REACT_DEFAULT_BY_DASH = {"4": "18.3.1"}
+
+
+def _major(version: Any) -> int | None:
+    try:
+        return int(str(version).split(".")[0])
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _effective_react_version() -> tuple[str | None, str]:
+    """Which React dash will actually serve, and where that fact came from."""
+    env = os.environ.get("REACT_VERSION")
+    if env:
+        return env, "REACT_VERSION"
+    try:
+        from dash import _dash_renderer
+
+        value = getattr(_dash_renderer, "_env_react_version", None)
+        if value:
+            return str(value), "_dash_renderer"
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import dash
+
+        major = str(getattr(dash, "__version__", "")).split(".")[0]
+        if major in _REACT_DEFAULT_BY_DASH:
+            return _REACT_DEFAULT_BY_DASH[major], "dash-default"
+    except Exception:  # noqa: BLE001
+        pass
+    return None, "unknown"
+
+
+def _react_compat(dash_version: Any, dmc_version: Any, react: str | None) -> tuple[bool | None, str]:
+    if dmc_version is None:
+        return True, "dash-mantine-components is not installed; no React constraint"
+    dmc_major = _major(dmc_version)
+    react_major = _major(react)
+    if dmc_major is None:
+        return None, f"cannot parse dash-mantine-components version {dmc_version!r}"
+    if dmc_major >= 3:
+        if react_major is None:
+            return False, (
+                "dash-mantine-components >=3 requires React 19 and the effective React version is unknown; "
+                "install dash-mantine-components<3 or start the server with REACT_VERSION=19.2.4"
+            )
+        if react_major < 19:
+            return False, (
+                f"dash-mantine-components {dmc_version} requires React 19, but dash serves React {react} "
+                f"(dash {dash_version}). The page will render blank. Install dash-mantine-components<3 "
+                "or set REACT_VERSION=19.2.4 for the server process."
+            )
+        return True, f"dash-mantine-components {dmc_version} with React {react}"
+    return True, f"dash-mantine-components {dmc_version} works with React {react or '18.x'}"
+
+
+_AGGREGATE_LABELS = re.compile(
+    r"^(合计|总计|小计|汇总|总合计|累计|total|subtotal|grand\s*total|sum|all)$",
+    re.IGNORECASE,
+)
+
+
+def _aggregate_row_note(pd, frame, max_scan: int = 2000) -> dict | None:
+    """Heuristic: does this frame contain a total row that sum() would double-count?
+
+    False positives are acceptable (the caller warns, it never rewrites data);
+    silence is not, because a KPI card that re-counts the total is systematically
+    wrong and looks authoritative.
+    """
+    try:
+        if frame is None or len(frame) < 2 or len(frame.columns) == 0:
+            return None
+        n = len(frame)
+        edge = sorted({p for p in list(range(min(n, 5))) + list(range(max(0, n - 5), n))})
+        for pos in edge:
+            row = frame.iloc[pos]
+            for col in frame.columns:
+                value = row[col]
+                if isinstance(value, str) and _AGGREGATE_LABELS.match(value.strip()):
+                    return {
+                        "code": "aggregate_row_suspected",
+                        "reason": "a row is labelled as a total/subtotal",
+                        "row": int(pos),
+                        "column": str(col),
+                        "label": value.strip(),
+                    }
+        scan = edge if n > max_scan else list(range(n))
+        for col in frame.columns:
+            series = frame[col]
+            if not pd.api.types.is_numeric_dtype(series) or series.isna().any() or len(series) < 3:
+                continue
+            total = float(series.sum())
+            if total == 0:
+                continue
+            for pos in scan:
+                value = float(series.iloc[pos])
+                if value == 0:
+                    continue
+                other = total - value
+                if abs(value - other) <= max(abs(total), 1.0) * 1e-9:
+                    return {
+                        "code": "aggregate_row_suspected",
+                        "reason": "one row equals the sum of the other rows",
+                        "row": int(pos),
+                        "column": str(col),
+                        "value": value,
+                    }
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _walk_figure_targets(node: Any, path: str = "", out: list | None = None) -> list[dict]:
+    """Every kpi_card-like figure in a config, with the frame it reads."""
+    if out is None:
+        out = []
+    if isinstance(node, dict):
+        target = node.get("_target_")
+        data_frame = node.get("data_frame")
+        if isinstance(target, str) and target in ("kpi_card", "kpi_card_reference") and isinstance(data_frame, str):
+            out.append({"path": path or "(root)", "data_frame": data_frame, "agg_func": node.get("agg_func", "sum")})
+        for key, value in node.items():
+            _walk_figure_targets(value, f"{path}.{key}" if path else str(key), out)
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            _walk_figure_targets(value, f"{path}.{index}" if path else str(index), out)
+    return out
+
+
+def _kpi_warnings(config: Any, notes: dict[str, dict]) -> list[dict]:
+    if not notes or not isinstance(config, dict):
+        return []
+    warnings = []
+    for figure in _walk_figure_targets(config):
+        note = notes.get(figure["data_frame"])
+        if not note:
+            continue
+        warnings.append(
+            {
+                "code": "kpi_card_double_counts_total",
+                "path": figure["path"],
+                "data_frame": figure["data_frame"],
+                "agg_func": figure["agg_func"],
+                "message": (
+                    f"kpi_card at {figure['path']} aggregates `{figure['data_frame']}`, which looks like it "
+                    f"contains a total row ({note['reason']} at row {note['row']}). The card will count that "
+                    "row again and disagree with charts that filter it. Register a detail-only frame for KPI "
+                    "components, or filter the total row before aggregating."
+                ),
+                "evidence": note,
+            }
+        )
+    return warnings
 
 
 def _records(frame) -> list[dict]:
@@ -583,3 +807,4 @@ if __name__ == "__main__":
     except Exception:  # noqa: BLE001
         pass
     raise SystemExit(main())
+

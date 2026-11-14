@@ -58,10 +58,15 @@ where `data` registers the sources the config references by name.
 
 1. `vizro_run { action: "start", entry: "<dir>/app.py" }` → returns `url`.
 2. `vizro_probe { entry: "<dir>/app.py" }` → checks HTTP, HTML, Dash layout,
-   dependencies, and the server log for tracebacks.
-3. Any failing check: read the detail, `vizro_run { action: "logs" }` for the
+   dependencies, the server log, **and renders the page in a headless browser**.
+   The render check is the only one that catches a page which answers 200 and
+   paints nothing (e.g. a React version mismatch).
+3. `ok` is `null` when no browser was available (`verdict: "unknown"`) — that is
+   *not* a pass. Say so when you report, or set `render: "require"` so a missing
+   browser fails instead of being skipped.
+4. Any failing check: read the detail, `vizro_run { action: "logs" }` for the
    traceback, fix, restart, probe again.
-4. When the user is done: `vizro_run { action: "stop" }`. An unattended server
+5. When the user is done: `vizro_run { action: "stop" }`. An unattended server
    holds a port and a Python process.
 
 ## Common errors
@@ -79,9 +84,12 @@ where `data` registers the sources the config references by name.
 
 ## Done when
 
-- [ ] `vizro_validate` returns `valid: true` on the entry file.
+- [ ] `vizro_validate` returns `valid: true` on the entry file, with no
+      `kpi_card_double_counts_total` warning (see `vizro-charts`).
 - [ ] `vizro_run` reports `running` and returns a URL.
-- [ ] `vizro_probe` reports `ok: true` (all checks), with no traceback in logs.
+- [ ] `vizro_probe` reports `verdict: "pass"` — including the `render` check. If
+      it reports `unknown` because no browser is installed, say so instead of
+      claiming the page was verified.
 - [ ] Every interaction the spec asks for has been exercised at least once.
 - [ ] Specs updated with any deviation.
 - [ ] The user has the URL (and knows the server can be stopped).

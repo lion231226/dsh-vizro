@@ -74,6 +74,33 @@ vm.Figure(figure=vf.kpi_card(
 - A dynamic KPI (text computed per interaction) is a `@capture("figure")`
   function, not a rebuilt chart.
 
+### The KPI data source must be detail-only
+
+`kpi_card` aggregates **the whole frame it receives** —
+`df[value_column].agg(agg_func)`, with `agg_func="sum"` as the default. A source
+that already ends with a `合计 / 总计 / TOTAL` row therefore gets counted twice:
+`3 + 7 + 10 = 20` where the answer is `10`. The card is silently wrong, the
+chart next to it is right, and readers trust the card. The plugin's
+`vizro_validate` warns (`kpi_card_double_counts_total`) when it sees a
+`kpi_card` bound to a frame with an aggregate-looking row — treat the warning as
+a bug, not noise.
+
+Register a detail-only frame for KPI components:
+
+```python
+from vizro.managers import data_manager
+
+raw = pd.read_csv("data/sales.csv")
+detail = raw[~raw["region"].isin(["合计", "总计", "TOTAL"])]  # or filter on the label column
+
+data_manager["sales_detail"] = detail      # KPI cards read this
+data_manager["sales"] = raw                # charts/tables may keep the total row
+```
+
+Then point every `kpi_card` at `data_frame="sales_detail"`. A filter does **not**
+save you: Vizro passes the filtered *whole* frame, so the total row survives
+filtering and the card stays wrong in a way that looks like it responded.
+
 ## Tables
 
 ```python

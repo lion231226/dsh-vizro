@@ -21,7 +21,7 @@ Vizro is McKinsey's low-code toolkit for data apps: a dashboard is a tree of Pyd
 | `vizro_data` | deterministic profile: dtype, null rate, cardinality, numeric range, time span, head sample; returns the `data` argument to pass to validation |
 | `vizro_scaffold` | writes a runnable `app.py` + `spec/1-3` templates, then validates the scaffold |
 | `vizro_run` | `start`/`stop`/`status`/`logs`/`list` for the local Dash server, with port allocation and log ring |
-| `vizro_probe` | first-load health: HTTP status, HTML, `_dash-layout`, `_dash-dependencies`, server-log tracebacks |
+| `vizro_probe` | health incl. a real DOM render: HTTP, HTML, `_dash-layout`, `_dash-dependencies`, server-log tracebacks, and headless-browser text/console checks (`verdict: pass / fail / unknown`) |
 | `vizro_doctor` | environment diagnosis: uv resolution, sidecar answer, skill visibility, running servers |
 
 ## Install
@@ -38,6 +38,7 @@ From source, or through the Plugin Market once listed, the same one-file bundle 
 - DeepSeek Harness with plugin bundles (any recent 0.2.x).
 - [`uv`](https://docs.astral.sh/uv/) on `PATH`. It is the only runtime dependency: the sidecar is a PEP 723 script that pins `vizro==1.0.0`, so `uv` provisions Python 3.11+ and the wheel set on first use and caches it afterwards.
 - Windows, macOS or Linux. The sidecar and dev server run as your user; a dashboard is a local Python process.
+- Optional: Chrome, Edge or Chromium for the DOM render check inside `vizro_probe`. Without one that check reports `skipped` and the verdict stays `unknown`.
 
 The first tool call installs Vizro through `uv` (30–60 s); later calls are milliseconds because the worker stays warm and is reaped after 10 idle minutes.
 
@@ -68,11 +69,11 @@ They are ports of the upstream `vizro-e2e-flow` skills (Apache-2.0), rewritten f
 
 ## Evals
 
-`node evals/run.mjs` runs nine deterministic cases (scaffold, config validation, code validation, profile determinism, serve+probe, failure detection, tool surface). `evals/README.md` also lists the nine agent-behaviour expectations ported from upstream, which need a real agent run.
+`node evals/run.mjs` runs fifteen deterministic cases (scaffold, config validation, code validation, profile determinism, serve+probe, failure detection, tool surface, DOM render pass/blank/unknown, aggregate-row and KPI warnings, pinned front-end stack). `evals/README.md` also lists the nine agent-behaviour expectations ported from upstream, which need a real agent run.
 
 ## Limits (read before relying on it)
 
-- `vizro_probe` is HTTP + log level. It catches a server that does not answer, a Dash layout that fails, and tracebacks in the log; it does **not** click every interactive component. Click-level checks still need a browser tool.
+- `vizro_probe` now renders the page in a headless Chromium/Edge when one is installed, so a blank dashboard cannot pass. Without a browser the render check reports `skipped` and `ok` is `null` (verdict `unknown`) — it never silently passes. It still does **not** click every interactive component.
 - The plugin runs Python as your user. A dashboard file can do what any local script can do.
 - Vizro 1.0.0 is pinned on purpose; a different Vizro version is not tested.
 - The settings panel is the only UI surface: no dedicated sidebar icon yet.
@@ -80,6 +81,7 @@ They are ports of the upstream `vizro-e2e-flow` skills (Apache-2.0), rewritten f
 ## License
 
 MIT. The bundled skills derive from McKinsey's `vizro` repository (`vizro-e2e-flow`, Apache-2.0); see `NOTICE`.
+
 
 
 
