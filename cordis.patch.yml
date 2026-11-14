@@ -1,0 +1,7 @@
+# dsh-vizro bundle patch: one dual-face plugin row in the profile roster.
+# The host half (exports ".") registers six native tools, six skills and the
+# /api/vizro/* routes; the `dsh.client` declaration in package.json loads the
+# workbench panel in the Web GUI.
+- insert:
+    - id: vizro
+      name: dsh-vizro

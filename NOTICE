@@ -1,0 +1,17 @@
+dsh-vizro
+Copyright (c) 2026 lion231226
+
+This product bundles skills derived from the Vizro project:
+
+  upstream: https://github.com/mckinsey/vizro
+  files:   vizro-e2e-flow/skills/*
+  license: Apache License 2.0
+
+The six skills under skills/ are rewrites for DeepSeek Harness of the upstream
+vizro-e2e-flow skills (dashboard-design, dashboard-build, designing-vizro-layouts,
+selecting-vizro-charts, wiring-vizro-actions, writing-vizro-yaml). They are
+distributed here under the MIT license of this package; the upstream material
+remains available under Apache-2.0.
+
+Vizro itself is not bundled. The plugin installs it at run time with uv, pinned
+to vizro==1.0.0, under the terms of its own license.

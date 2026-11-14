@@ -1,0 +1,14 @@
+node_modules/
+.pnpm-store/
+*.tgz
+.vizro-workbench/
+__pycache__/
+*.pyc
+.uv-cache/
+.DS_Store
+dist/
+_tmp/
+_probe/
+evals/.work/
+evals/.run.log
+evals/.work-*/
