@@ -103,7 +103,7 @@ fetch from the panel).
 | A9 | Workbench panel registered | `settings.section` occupants include `id: vizro` |
 | A10 | Deterministic evals | `node evals/run.mjs` — 9 cases |
 | A11 | Repo is a complete open-source package | README/zh, SPEC, NOTICE, LICENSE, tests, release tarball |
-| A12 | Listed in the community catalog | PR to `awesome-dsh-plugin` (see market note) |
+| A12 | Submitted to the community catalog | [`awesome-dsh-plugin#15133`](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/15133); CI blocked only by the repo-age gate, which the catalog's `regate` workflow re-runs every 6 h |
 
 ## 7. Market note
 
@@ -129,6 +129,7 @@ from which the market reads. This plugin follows that path.
 - Proxy preview under `/api/vizro/preview/:port` with
   `requests_pathname_prefix`, so the panel works behind stricter CSP.
 - A sidebar entry (icon + panel) beside the settings section.
+
 
 
 
