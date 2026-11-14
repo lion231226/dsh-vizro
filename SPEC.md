@@ -1,6 +1,6 @@
 # SPEC — dsh-vizro
 
-Status: 0.3.2. This document is the design record: what the plugin is, what it
+Status: 0.3.3. This document is the design record: what the plugin is, what it
 deliberately is not, and the evidence that the acceptance criteria hold.
 
 ## 1. Objective
@@ -129,6 +129,7 @@ from which the market reads. This plugin follows that path.
 - Proxy preview under `/api/vizro/preview/:port` with
   `requests_pathname_prefix`, so the panel works behind stricter CSP.
 - A sidebar entry (icon + panel) beside the settings section.
+
 
 
 
