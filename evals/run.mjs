@@ -186,14 +186,14 @@ async function main() {
   console.log('> case 9 tool surface')
   try {
     const names = Object.keys(tools).sort()
-    const expected = ['vizro_data', 'vizro_probe', 'vizro_run', 'vizro_scaffold', 'vizro_schema', 'vizro_validate']
+    const expected = ['vizro_data', 'vizro_doctor', 'vizro_probe', 'vizro_run', 'vizro_scaffold', 'vizro_schema', 'vizro_validate']
     record(
-      'six tools with descriptions and output renderers',
+      'seven tools with descriptions and output renderers',
       JSON.stringify(names) === JSON.stringify(expected) && Object.values(tools).every((tool) => tool.output?.render),
       names.join(','),
     )
   } catch (error) {
-    record('six tools with descriptions and output renderers', false, String(error?.message ?? error))
+    record('seven tools with descriptions and output renderers', false, String(error?.message ?? error))
   }
 
   sidecar.dispose('eval finished')
@@ -215,3 +215,4 @@ main().catch((error) => {
   process.exitCode = 1
   setTimeout(() => process.exit(1), 100)
 })
+

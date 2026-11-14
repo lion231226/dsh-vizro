@@ -8,7 +8,7 @@ Vizro 是麦肯锡开源的 Python 低代码数据应用框架：仪表盘是一
 
 | 面 | 数量 | 内容 |
 | --- | --- | --- |
-| 工具 | 6 | `vizro_schema`、`vizro_validate`、`vizro_data`、`vizro_scaffold`、`vizro_run`、`vizro_probe` |
+| 工具 | 7 | `vizro_schema`、`vizro_validate`、`vizro_data`、`vizro_scaffold`、`vizro_run`、`vizro_probe`、`vizro_doctor` |
 | 技能 | 6 | `vizro-dashboard-design`、`vizro-dashboard-build`、`vizro-layouts`、`vizro-charts`、`vizro-actions`、`vizro-yaml` |
 | 界面 | 1 | 设置里的 **Vizro** 面板：工作区应用、启停、内嵌预览、日志 |
 
@@ -37,3 +37,4 @@ dsh plugin --profile <profile> add dsh-vizro
 ## 许可
 
 MIT。内置技能改编自麦肯锡 `vizro` 仓库的 `vizro-e2e-flow`（Apache-2.0），见 `NOTICE`。
+

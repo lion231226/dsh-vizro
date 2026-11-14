@@ -1,6 +1,6 @@
 # SPEC — dsh-vizro
 
-Status: 0.3.0. This document is the design record: what the plugin is, what it
+Status: 0.3.1. This document is the design record: what the plugin is, what it
 deliberately is not, and the evidence that the acceptance criteria hold.
 
 ## 1. Objective
@@ -30,7 +30,7 @@ Dual-face bundle, one row in the profile patch.
 
 | Face | Entry | Registers |
 | --- | --- | --- |
-| Host | `lib/host/index.js` (`apply(ctx)`) | 6 tools, 6 skills, 3 routes, sidecar + server ownership |
+| Host | `lib/host/index.js` (`apply(ctx)`) | 7 tools, 6 skills, 3 routes, sidecar + server ownership |
 | Client | `lib/client/index.js` (`__ModuleLoader__.load`) | `settings.section` → id `vizro`, order 60 |
 
 Python lives in `sidecar/` as three PEP 723 scripts:
@@ -53,6 +53,7 @@ Python lives in `sidecar/` as three PEP 723 scripts:
 | `vizro_scaffold` | `{dir, title?, overwrite?}` | `{files, entry, scaffold_validates, scaffold_errors}` |
 | `vizro_run` | `{action, entry?, port?}` | server snapshot `{entry,url,port,state,logs}` |
 | `vizro_probe` | `{url?}` or `{entry?}` | `{ok, checks[{name,ok,detail}], logs}` |
+| `vizro_doctor` | `{deep?}` | `{uv, uvOk, skillsService, skillsVisible, skillsMissing, servers, runtime?}` |
 
 Every output is lossless JSON; `undefined` fields are omitted rather than
 serialized.
@@ -92,7 +93,7 @@ fetch from the panel).
 | # | Criterion | Evidence |
 | --- | --- | --- |
 | A1 | Bundle installs and applies | `install_bundle` → `application: applied` |
-| A2 | Six tools registered with schemas | live tool list + `test/plugin.test.mjs` |
+| A2 | Seven tools registered with schemas | live tool list + `test/plugin.test.mjs` |
 | A3 | Schema: index + enhanced model schema | `vizro_schema` → 31 models; `Graph` includes `figure` |
 | A4 | Profile deterministic and decision-grade | two calls byte-identical; min/max/nunique/top/head |
 | A5 | Scaffold writes app + specs and self-validates | `scaffold_validates: true`, 4 files |
@@ -128,3 +129,7 @@ from which the market reads. This plugin follows that path.
 - Proxy preview under `/api/vizro/preview/:port` with
   `requests_pathname_prefix`, so the panel works behind stricter CSP.
 - A sidebar entry (icon + panel) beside the settings section.
+
+
+
+

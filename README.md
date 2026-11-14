@@ -8,7 +8,7 @@ Vizro is McKinsey's low-code toolkit for data apps: a dashboard is a tree of Pyd
 
 | Surface | Count | What |
 | --- | --- | --- |
-| Tools | 6 | `vizro_schema`, `vizro_validate`, `vizro_data`, `vizro_scaffold`, `vizro_run`, `vizro_probe` |
+| Tools | 7 | `vizro_schema`, `vizro_validate`, `vizro_data`, `vizro_scaffold`, `vizro_run`, `vizro_probe`, `vizro_doctor` |
 | Skills | 6 | `vizro-dashboard-design`, `vizro-dashboard-build`, `vizro-layouts`, `vizro-charts`, `vizro-actions`, `vizro-yaml` |
 | UI | 1 | a **Vizro** panel in Settings: workspace apps, start/stop, embedded preview, logs |
 
@@ -22,6 +22,7 @@ Vizro is McKinsey's low-code toolkit for data apps: a dashboard is a tree of Pyd
 | `vizro_scaffold` | writes a runnable `app.py` + `spec/1-3` templates, then validates the scaffold |
 | `vizro_run` | `start`/`stop`/`status`/`logs`/`list` for the local Dash server, with port allocation and log ring |
 | `vizro_probe` | first-load health: HTTP status, HTML, `_dash-layout`, `_dash-dependencies`, server-log tracebacks |
+| `vizro_doctor` | environment diagnosis: uv resolution, sidecar answer, skill visibility, running servers |
 
 ## Install
 
@@ -45,7 +46,7 @@ The first tool call installs Vizro through `uv` (30–60 s); later calls are mil
 ```
 DSH Host process
 └─ dsh-vizro (host half)
-   ├─ ctx.tools.register      → the six tools
+   ├─ ctx.tools.register      → the seven tools
    ├─ ctx.skills.register     → the six skills
    ├─ ctx.webServer.register  → /api/vizro/{status,run,health}
    ├─ ctx.subprocess.spawn    → uv run sidecar/worker.py   (JSON lines: schema/validate/profile)
@@ -79,3 +80,6 @@ They are ports of the upstream `vizro-e2e-flow` skills (Apache-2.0), rewritten f
 ## License
 
 MIT. The bundled skills derive from McKinsey's `vizro` repository (`vizro-e2e-flow`, Apache-2.0); see `NOTICE`.
+
+
+

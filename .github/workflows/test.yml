@@ -1,0 +1,33 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Unit tests
+        run: node --test "test/**/*.test.mjs"
+      - name: Syntax check
+        run: |
+          for f in lib/host/*.js lib/client/*.js evals/*.mjs; do node --check "$f"; done
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Byte-compile the sidecar scripts
+        run: python -m py_compile sidecar/worker.py sidecar/check_app.py sidecar/serve.py

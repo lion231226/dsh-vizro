@@ -53,10 +53,10 @@ test('registering six tools through a mock registry', () => {
     return undefined
   }
   apply(ctx)
-  assert.equal(seen.length, 6)
+  assert.equal(seen.length, 7)
   assert.deepEqual(
     seen.map((tool) => tool.name).sort(),
-    ['vizro_data', 'vizro_probe', 'vizro_run', 'vizro_scaffold', 'vizro_schema', 'vizro_validate'],
+    ['vizro_data', 'vizro_doctor', 'vizro_probe', 'vizro_run', 'vizro_scaffold', 'vizro_schema', 'vizro_validate'],
   )
   for (const tool of seen) {
     assert.equal(typeof tool.description, 'string')
@@ -88,3 +88,4 @@ test('findApps locates Vizro entry files', () => {
   const apps = findApps(ROOT, 2, 10)
   assert.ok(apps.some((app) => app.name.endsWith('.py')))
 })
+
